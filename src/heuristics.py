@@ -105,6 +105,7 @@ INSTRUCTION_HEADERS = [
     'how to make', 'how to prepare', 'preparation',
     'cooking instructions', 'cooking directions', 'cooking method',
     'to make', 'to prepare', 'making', 'preparing',
+    'technique', 'techniques', 'proceso', 'preparación',  # Added missing
 ]
 
 # ==============================================================================
@@ -279,6 +280,65 @@ def is_instruction_line(line: str) -> float:
     return max(0.0, min(1.0, score))
 
 
+def normalize_header(line: str) -> str:
+    """
+    Normalize a header line by removing markdown formatting and punctuation.
+
+    Handles:
+    - Markdown headers: # Header, ## Header, ### Header
+    - Trailing colons: Ingredients:
+    - Leading/trailing whitespace
+
+    Args:
+        line: Raw header line
+
+    Returns:
+        Normalized header text in lowercase
+    """
+    # Remove markdown header markers
+    line = re.sub(r'^#+\s*', '', line)
+    # Remove trailing colon and whitespace
+    line = re.sub(r'[:\s]*$', '', line)
+    # Remove leading whitespace
+    line = line.strip()
+    return line.lower()
+
+
+def is_header_match(line: str, headers: List[str]) -> bool:
+    """
+    Check if a line matches any header in the list.
+
+    Handles various formats:
+    - Plain: "Ingredients"
+    - With colon: "Ingredients:"
+    - Markdown: "# Ingredients", "## Ingredients", "### Ingredients"
+    - Mixed: "## Ingredients:"
+
+    Args:
+        line: Line to check
+        headers: List of header strings to match against
+
+    Returns:
+        True if line matches any header
+    """
+    # Normalize the line
+    normalized = normalize_header(line)
+
+    # Check exact match
+    if normalized in headers:
+        return True
+
+    # Check if any header is contained at the start
+    for header in headers:
+        if normalized == header:
+            return True
+        # Handle "for the ..." variations like "for the sauce"
+        if header.startswith('for ') and normalized.startswith(header):
+            return True
+
+    return False
+
+
 def find_section_headers(lines: List[str]) -> Dict[str, Tuple[int, int]]:
     """
     Find ingredient and instruction section boundaries by detecting headers.
@@ -295,27 +355,23 @@ def find_section_headers(lines: List[str]) -> Dict[str, Tuple[int, int]]:
     instruction_start = None
 
     for i, line in enumerate(lines):
-        line_lower = line.lower().strip()
+        line_stripped = line.strip()
 
         # Skip very short lines
-        if len(line_lower) < 3:
+        if len(line_stripped) < 3:
             continue
 
         # Check for ingredient headers
-        if not ingredient_start:
-            for header in INGREDIENT_HEADERS:
-                if line_lower == header or line_lower.startswith(header + ':'):
-                    ingredient_start = i + 1  # Start after header
-                    logger.debug(f"Found ingredient header at line {i}: {line}")
-                    break
+        if ingredient_start is None:
+            if is_header_match(line_stripped, INGREDIENT_HEADERS):
+                ingredient_start = i + 1  # Start after header
+                logger.debug(f"Found ingredient header at line {i}: {line}")
 
-        # Check for instruction headers
-        if not instruction_start:
-            for header in INSTRUCTION_HEADERS:
-                if line_lower == header or line_lower.startswith(header + ':'):
-                    instruction_start = i + 1  # Start after header
-                    logger.debug(f"Found instruction header at line {i}: {line}")
-                    break
+        # Check for instruction headers (can override ingredient end)
+        if instruction_start is None:
+            if is_header_match(line_stripped, INSTRUCTION_HEADERS):
+                instruction_start = i + 1  # Start after header
+                logger.debug(f"Found instruction header at line {i}: {line}")
 
     # Determine section boundaries
     if ingredient_start is not None and instruction_start is not None:
@@ -348,7 +404,45 @@ def extract_lines_from_html(html: str) -> List[str]:
     Returns:
         List of cleaned text lines
     """
-    # Try BeautifulSoup first for better structure preservation
+    # Try html2text first - it handles markdown conversion better
+    try:
+        h = html2text.HTML2Text()
+        h.ignore_links = True
+        h.ignore_images = True
+        h.ignore_emphasis = False  # Keep emphasis for header detection
+        h.body_width = 0  # Don't wrap lines
+        h.unicode_snob = True
+
+        text = h.handle(html)
+
+        # Process lines - preserve markdown headers and numbered lists
+        lines = []
+        for line in text.split('\n'):
+            stripped = line.strip()
+            if not stripped:
+                continue
+
+            # Preserve markdown headers as-is (for header detection)
+            if stripped.startswith('#'):
+                lines.append(stripped)
+                continue
+
+            # Clean up bullet markers from ingredient lists
+            # Handle "  * item" and "  - item" (with leading spaces)
+            if re.match(r'^\s*[\*\-]\s+', line):
+                cleaned = re.sub(r'^\s*[\*\-]\s+', '', line).strip()
+                if cleaned:
+                    lines.append(cleaned)
+            else:
+                # Keep numbered items and regular text as-is
+                lines.append(stripped)
+
+        if lines:
+            return lines
+    except Exception as e:
+        logger.warning(f"html2text extraction failed: {e}")
+
+    # Fallback to BeautifulSoup
     try:
         soup = BeautifulSoup(html, 'html.parser')
 
@@ -360,7 +454,7 @@ def extract_lines_from_html(html: str) -> List[str]:
         processed_elements = set()
 
         # Extract text from each block-level element, avoiding nested duplicates
-        for element in soup.find_all(['p', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
+        for element in soup.find_all(['p', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div', 'span']):
             # Skip if this element is inside another we've already processed
             if element in processed_elements:
                 continue
@@ -384,26 +478,14 @@ def extract_lines_from_html(html: str) -> List[str]:
     except Exception as e:
         logger.warning(f"BeautifulSoup extraction failed: {e}")
 
-    # Fallback to html2text
+    # Last resort: simple text extraction
     try:
-        h = html2text.HTML2Text()
-        h.ignore_links = True
-        h.ignore_images = True
-        h.ignore_emphasis = True
-        h.body_width = 0  # Don't wrap lines
-
-        text = h.handle(html)
+        soup = BeautifulSoup(html, 'html.parser')
+        text = soup.get_text(separator='\n')
         lines = [line.strip() for line in text.split('\n') if line.strip()]
         return lines
-    except Exception as e:
-        logger.warning(f"html2text extraction failed: {e}")
-
-    # Last resort: simple text extraction
-    soup = BeautifulSoup(html, 'html.parser')
-    text = soup.get_text(separator='\n')
-    lines = [line.strip() for line in text.split('\n') if line.strip()]
-
-    return lines
+    except Exception:
+        return []
 
 
 def group_consecutive_lines(line_scores: List[Tuple[str, float, float]], threshold: float = 0.3) -> Tuple[List[str], List[str]]:
