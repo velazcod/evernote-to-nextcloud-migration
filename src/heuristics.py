@@ -339,6 +339,81 @@ def is_header_match(line: str, headers: List[str]) -> bool:
     return False
 
 
+def is_numbered_instruction_start(line: str) -> bool:
+    """
+    Check if a line looks like the start of numbered instructions.
+
+    Patterns like: "1) Preheat", "1. Mix", "1) Take the..."
+    """
+    # Match numbered step patterns
+    match = re.match(r'^(\d+)[\.\)]\s*(.+)', line)
+    if not match:
+        return False
+
+    num, content = match.groups()
+    # First step (1) is most likely to be instruction start
+    if num != '1':
+        return False
+
+    # Check if content starts with a cooking verb
+    content_lower = content.lower()
+    for verb in INSTRUCTION_VERBS:
+        if content_lower.startswith(verb):
+            return True
+
+    # Also check for common instruction starters
+    instruction_starters = ['in a', 'place', 'take', 'using', 'start', 'begin', 'first']
+    for starter in instruction_starters:
+        if content_lower.startswith(starter):
+            return True
+
+    return False
+
+
+def is_instruction_sentence(line: str) -> bool:
+    """
+    Check if a line looks like an instruction sentence (not numbered).
+
+    Detects patterns like:
+    - "In a large bowl, mix..."
+    - "Preheat the oven to 375F"
+    - "Heat a non-stick pan..."
+    """
+    if not line or len(line) < 15:  # Instructions are usually longer sentences
+        return False
+
+    line_lower = line.lower().strip()
+
+    # Skip lines that look like ingredients (have measurements)
+    ingredient_indicators = ['cup', 'tbsp', 'tsp', 'oz', 'lb', 'gram', 'ml', 'pound']
+    words = line_lower.split()
+    if len(words) <= 4:  # Short lines are probably not instructions
+        return False
+
+    # Check if line starts with instruction patterns
+    instruction_sentence_starters = [
+        'in a ', 'in the ', 'using a ', 'with a ',
+        'heat ', 'preheat ', 'place ', 'put ',
+        'add ', 'pour ', 'mix ', 'stir ', 'whisk ', 'blend ',
+        'bake ', 'cook ', 'fry ', 'grill ', 'roast ',
+        'let ', 'allow ', 'cover ', 'refrigerate ', 'chill ',
+        'scoop ', 'drop ', 'spread ', 'layer ',
+    ]
+
+    for starter in instruction_sentence_starters:
+        if line_lower.startswith(starter):
+            # Make sure it's not just "Add:" or "Mix:" (which could be sub-headers)
+            if not line_lower.rstrip().endswith(':'):
+                return True
+
+    # Check if line contains instruction verbs as main action
+    for verb in ['preheat', 'bake', 'cook', 'simmer', 'boil', 'fry', 'sauté', 'roast']:
+        if verb in line_lower and len(line) > 30:  # Longer sentences with cooking verbs
+            return True
+
+    return False
+
+
 def find_section_headers(lines: List[str]) -> Dict[str, Tuple[int, int]]:
     """
     Find ingredient and instruction section boundaries by detecting headers.
@@ -372,24 +447,44 @@ def find_section_headers(lines: List[str]) -> Dict[str, Tuple[int, int]]:
             if is_header_match(line_stripped, INSTRUCTION_HEADERS):
                 instruction_start = i + 1  # Start after header
                 logger.debug(f"Found instruction header at line {i}: {line}")
+            # Also check for numbered instruction start (implicit header)
+            elif ingredient_start is not None and is_numbered_instruction_start(line_stripped):
+                instruction_start = i  # Start at this line (include it)
+                logger.debug(f"Found numbered instruction start at line {i}: {line}")
 
     # Determine section boundaries
     if ingredient_start is not None and instruction_start is not None:
         # Both sections found
         if ingredient_start < instruction_start:
-            sections['ingredients'] = (ingredient_start, instruction_start - 1)
+            sections['ingredients'] = (ingredient_start, instruction_start)
             sections['instructions'] = (instruction_start, len(lines))
         else:
-            sections['instructions'] = (instruction_start, ingredient_start - 1)
+            sections['instructions'] = (instruction_start, ingredient_start)
             sections['ingredients'] = (ingredient_start, len(lines))
     elif ingredient_start is not None:
-        # Only ingredients found - assume rest is instructions or unknown
-        sections['ingredients'] = (ingredient_start, len(lines))
+        # Only ingredients found - look for numbered steps or instruction sentences
+        for i in range(ingredient_start, len(lines)):
+            line_stripped = lines[i].strip()
+            if is_numbered_instruction_start(line_stripped):
+                instruction_start = i
+                sections['ingredients'] = (ingredient_start, instruction_start)
+                sections['instructions'] = (instruction_start, len(lines))
+                logger.debug(f"Found numbered instruction start at line {i}: {line_stripped}")
+                break
+            elif is_instruction_sentence(line_stripped):
+                instruction_start = i
+                sections['ingredients'] = (ingredient_start, instruction_start)
+                sections['instructions'] = (instruction_start, len(lines))
+                logger.debug(f"Found instruction sentence at line {i}: {line_stripped}")
+                break
+
+        if instruction_start is None:
+            sections['ingredients'] = (ingredient_start, len(lines))
     elif instruction_start is not None:
         # Only instructions found - assume earlier content is ingredients
         sections['instructions'] = (instruction_start, len(lines))
         if instruction_start > 0:
-            sections['ingredients'] = (0, instruction_start - 1)
+            sections['ingredients'] = (0, instruction_start)
 
     return sections
 

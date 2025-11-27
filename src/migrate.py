@@ -90,6 +90,95 @@ def category_from_filename(enex_path: Path) -> str:
     return name
 
 
+def extract_name_from_content(description: str, html_content: str) -> str | None:
+    """
+    Extract recipe name from content when note title is empty/untitled.
+
+    The recipe name is typically at the start of the description or
+    in the first heading of the HTML content.
+
+    Args:
+        description: Extracted description field
+        html_content: Raw HTML content
+
+    Returns:
+        Extracted name or None if not found
+    """
+    import re
+    from bs4 import BeautifulSoup
+
+    # Strategy 1: Extract from description (most reliable)
+    # Description often starts with "Recipe Name Ingredients..." or "Recipe Name Description..."
+    if description:
+        # Common patterns that indicate end of recipe name
+        stop_words = [
+            'ingredients', 'ingredient', 'directions', 'instructions',
+            'method', 'recipe', 'prep', 'cook', 'servings', 'serving',
+            'calories', 'cal', 'mins', 'min', 'hours', 'hour',
+            # Spanish
+            'ingredientes', 'preparación', 'instrucciones',
+        ]
+
+        # Build regex to find where the name ends
+        # Match until we hit a common stop word or excessive length
+        desc_lower = description.lower()
+
+        # Find the earliest stop word position
+        earliest_pos = len(description)
+        for word in stop_words:
+            pos = desc_lower.find(word)
+            if pos > 0 and pos < earliest_pos:
+                earliest_pos = pos
+
+        # Also check for pattern breaks (multiple spaces, common separators)
+        for pattern in [' - ', ' | ', ' :: ', '  ', '\n']:
+            pos = description.find(pattern)
+            if pos > 5 and pos < earliest_pos:  # At least 5 chars for a valid name
+                earliest_pos = pos
+
+        # Extract potential name
+        if earliest_pos > 5 and earliest_pos < 150:  # Reasonable name length
+            potential_name = description[:earliest_pos].strip()
+            # Clean up trailing punctuation
+            potential_name = re.sub(r'[:\-–—|]+$', '', potential_name).strip()
+
+            # Validate it looks like a name (not just numbers/garbage)
+            if len(potential_name) >= 3 and re.search(r'[a-zA-Z]', potential_name):
+                logger.debug(f"Extracted name from description: '{potential_name}'")
+                return potential_name
+
+    # Strategy 2: Look for first heading in HTML
+    if html_content:
+        soup = BeautifulSoup(html_content, 'html.parser')
+
+        # Try h1, h2, h3, or first div with substantial text
+        for tag in ['h1', 'h2', 'h3']:
+            heading = soup.find(tag)
+            if heading and heading.get_text(strip=True):
+                name = heading.get_text(strip=True)
+                if 3 <= len(name) <= 150:
+                    logger.debug(f"Extracted name from <{tag}>: '{name}'")
+                    return name
+
+        # Try first bold/strong text
+        bold = soup.find(['b', 'strong'])
+        if bold and bold.get_text(strip=True):
+            name = bold.get_text(strip=True)
+            if 3 <= len(name) <= 100:
+                logger.debug(f"Extracted name from bold text: '{name}'")
+                return name
+
+    return None
+
+
+def is_untitled(title: str) -> bool:
+    """Check if a title is effectively untitled."""
+    if not title:
+        return True
+    title_lower = title.lower().strip()
+    return title_lower in ('untitled note', 'untitled', '')
+
+
 def collect_enex_files(file_args: list[str], input_dir: str | None) -> list[Path]:
     """
     Collect ENEX files from command line args or input directory.
@@ -161,7 +250,18 @@ def process_note(
         )
 
         # Set fields from note metadata
-        recipe.name = note.title
+        # Try to extract a better name if note is untitled
+        if is_untitled(note.title):
+            extracted_name = extract_name_from_content(recipe.description, note.content_html)
+            if extracted_name:
+                recipe.name = extracted_name
+                logger.info(f"Extracted name for untitled note: '{extracted_name}'")
+            else:
+                recipe.name = note.title  # Keep "Untitled Note"
+                logger.warning(f"Could not extract name for untitled note, using: '{note.title}'")
+        else:
+            recipe.name = note.title
+
         recipe.keywords = ', '.join(note.tags)
         recipe.date_created = note.created.isoformat()
         recipe.date_published = note.created.strftime('%Y-%m-%d')
