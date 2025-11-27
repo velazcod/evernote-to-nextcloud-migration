@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE en-export SYSTEM "http://xml.evernote.com/pub/evernote-export.dtd">
+<en-export export-date="20240115T120000Z" application="Evernote" version="10.0">
+  <note>
+    <title>Simple Pasta Recipe</title>
+    <content><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml.dtd">
+<en-note>
+<div><b>Ingredients:</b></div>
+<div>- 1 lb spaghetti</div>
+<div>- 2 cups marinara sauce</div>
+<div>- 1/4 cup parmesan cheese</div>
+<div>- 2 tablespoons olive oil</div>
+<div><br/></div>
+<div><b>Instructions:</b></div>
+<div>1. Boil water in a large pot and cook pasta according to package directions.</div>
+<div>2. Heat marinara sauce in a separate pan.</div>
+<div>3. Drain pasta and toss with olive oil.</div>
+<div>4. Top with marinara sauce and parmesan cheese.</div>
+<div>5. Serve immediately.</div>
+</en-note>
+]]></content>
+    <created>20240101T120000Z</created>
+    <updated>20240115T180000Z</updated>
+    <tag>dinner</tag>
+    <tag>italian</tag>
+    <tag>quick</tag>
+    <note-attributes>
+      <author>Test User</author>
+    </note-attributes>
+  </note>
+  <note>
+    <title>Chocolate Chip Cookies</title>
+    <content><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml.dtd">
+<en-note>
+<div>Classic chocolate chip cookies recipe</div>
+<div><br/></div>
+<div><b>Ingredients</b></div>
+<div>2 1/4 cups all-purpose flour</div>
+<div>1 cup butter, softened</div>
+<div>3/4 cup granulated sugar</div>
+<div>3/4 cup packed brown sugar</div>
+<div>2 large eggs</div>
+<div>1 tsp vanilla extract</div>
+<div>1 tsp baking soda</div>
+<div>1 tsp salt</div>
+<div>2 cups chocolate chips</div>
+<div><br/></div>
+<div><b>Directions</b></div>
+<div>1. Preheat oven to 375&deg;F.</div>
+<div>2. Mix flour, baking soda, and salt in a bowl.</div>
+<div>3. Beat butter and sugars until creamy.</div>
+<div>4. Add eggs and vanilla to butter mixture.</div>
+<div>5. Gradually blend in flour mixture.</div>
+<div>6. Stir in chocolate chips.</div>
+<div>7. Drop rounded tablespoons onto ungreased baking sheets.</div>
+<div>8. Bake 9 to 11 minutes or until golden brown.</div>
+</en-note>
+]]></content>
+    <created>20231215T100000Z</created>
+    <updated>20231220T140000Z</updated>
+    <tag>dessert</tag>
+    <tag>baking</tag>
+    <note-attributes>
+      <source-url>https://example.com/cookies</source-url>
+    </note-attributes>
+  </note>
+  <note>
+    <title>Grandma's Secret Recipe</title>
+    <content><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml.dtd">
+<en-note>
+<div>This is just some notes about grandma's recipe that she never wrote down.</div>
+<div>Something with chicken and vegetables, I think.</div>
+<div>Need to ask mom for details.</div>
+</en-note>
+]]></content>
+    <created>20230601T090000Z</created>
+    <tag>family</tag>
+    <note-attributes>
+    </note-attributes>
+  </note>
+</en-export>

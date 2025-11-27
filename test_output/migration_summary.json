@@ -1,0 +1,17 @@
+{
+  "run_date": "2025-11-27T11:04:05.030353",
+  "mode": "production",
+  "duration_seconds": 5.8,
+  "summary": {
+    "total_notes": 4,
+    "successful": 1,
+    "needs_review": 3,
+    "failed": 0,
+    "images_extracted": 3
+  },
+  "by_category": {
+    "Needs Review": 3,
+    "Review - Possible Duplicate": 1
+  },
+  "issues": []
+}
